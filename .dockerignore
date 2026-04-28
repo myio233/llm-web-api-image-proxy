@@ -1,0 +1,14 @@
+.env
+llm_web_frontend/.env
+.git
+.serena
+.venv
+__pycache__
+*.pyc
+data
+browser_data
+llm_web_frontend/__pycache__
+docker/patches/__pycache__
+docker-compose
+llm_web_frontend
+*.html

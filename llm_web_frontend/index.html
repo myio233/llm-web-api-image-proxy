@@ -1,0 +1,1368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Local Chat</title>
+  <style>
+    :root{
+      --bg:#efe9dc;
+      --bg-soft:#f8f3e8;
+      --panel:#fffdf8;
+      --border:#d9cfbe;
+      --text:#231b12;
+      --muted:#6c5d4f;
+      --accent:#146c63;
+      --accent-deep:#0f5b54;
+      --accent-soft:#d7f0eb;
+      --user:#efe0c5;
+      --danger:#b42318;
+      --danger-soft:#fee4e2;
+      --shadow:0 18px 48px rgba(77, 53, 23, .08);
+      --mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+      --sans:"Avenir Next","PingFang SC","Microsoft YaHei",sans-serif;
+    }
+
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      min-height:100%;
+      background:
+        radial-gradient(circle at top left, rgba(20,108,99,.16), transparent 24rem),
+        radial-gradient(circle at right 10%, rgba(201,149,73,.12), transparent 20rem),
+        linear-gradient(180deg, var(--bg) 0%, #f8f1e4 100%);
+      color:var(--text);
+      font-family:var(--sans);
+    }
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer;border:0}
+    .hidden{display:none !important}
+    .screen{min-height:100vh;padding:24px}
+    .login-shell{
+      max-width:1120px;
+      margin:0 auto;
+      min-height:calc(100vh - 48px);
+      display:grid;
+      grid-template-columns:1.04fr .96fr;
+      gap:24px;
+      align-items:stretch;
+    }
+    .hero,.panel,.sidebar,.chat-shell{
+      background:rgba(255,253,248,.82);
+      border:1px solid rgba(255,255,255,.4);
+      backdrop-filter:blur(14px);
+      box-shadow:var(--shadow);
+    }
+    .hero{
+      border-radius:32px;
+      padding:36px;
+      position:relative;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .hero::after{
+      content:"";
+      position:absolute;
+      right:-7rem;
+      bottom:-7rem;
+      width:18rem;
+      height:18rem;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(20,108,99,.2) 0%, rgba(20,108,99,0) 68%);
+      pointer-events:none;
+    }
+    .eyebrow{
+      display:inline-flex;
+      min-height:34px;
+      align-items:center;
+      padding:0 12px;
+      border-radius:999px;
+      background:rgba(20,108,99,.1);
+      color:var(--accent-deep);
+      font-weight:800;
+      font-size:13px;
+    }
+    .hero h1{
+      margin:18px 0 14px;
+      max-width:10ch;
+      font-size:58px;
+      line-height:1;
+      letter-spacing:-.05em;
+    }
+    .hero p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.85;
+      font-size:17px;
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:12px;
+      margin-top:28px;
+    }
+    .hero-card{
+      padding:16px;
+      border-radius:20px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.6);
+    }
+    .hero-card strong{
+      display:block;
+      margin-bottom:6px;
+      font-size:14px;
+    }
+    .hero-card span{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.7;
+    }
+    .panel{
+      border-radius:32px;
+      padding:28px;
+      display:flex;
+      flex-direction:column;
+    }
+    .panel h2{
+      margin:0 0 8px;
+      font-size:28px;
+      letter-spacing:-.04em;
+    }
+    .panel p{
+      margin:0 0 22px;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.8;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .field.full{grid-column:1/-1}
+    .field label{
+      font-size:13px;
+      font-weight:800;
+      color:#4c4136;
+    }
+    .field input,.field select,.composer textarea{
+      width:100%;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.92);
+      border-radius:18px;
+      padding:14px 16px;
+      outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    .field input:focus,.field select:focus,.composer textarea:focus{
+      border-color:rgba(20,108,99,.56);
+      box-shadow:0 0 0 4px rgba(20,108,99,.12);
+    }
+    .hint{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.7;
+    }
+    .actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:18px;
+    }
+    .btn{
+      min-height:46px;
+      padding:0 18px;
+      border-radius:16px;
+      font-weight:800;
+      transition:transform .15s ease, opacity .15s ease;
+    }
+    .btn:hover:not(:disabled){transform:translateY(-1px)}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover:not(:disabled){background:var(--accent-deep)}
+    .btn-secondary{background:#fff;color:var(--text);border:1px solid var(--border)}
+    .status{
+      min-height:24px;
+      margin-top:12px;
+      font-size:13px;
+      line-height:1.7;
+      color:var(--muted);
+      white-space:pre-wrap;
+    }
+    .status.error{color:var(--danger)}
+    .note{
+      margin-top:18px;
+      padding:14px 16px;
+      border-radius:18px;
+      background:rgba(255,255,255,.72);
+      border:1px solid var(--border);
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.8;
+    }
+    .chat-layout{
+      max-width:1420px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns:310px minmax(0,1fr);
+      gap:20px;
+      min-height:calc(100vh - 48px);
+    }
+    .sidebar{
+      border-radius:28px;
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .brand{
+      padding:18px;
+      border-radius:22px;
+      background:linear-gradient(135deg, rgba(20,108,99,.14), rgba(201,149,73,.12));
+      border:1px solid rgba(20,108,99,.18);
+    }
+    .brand h2{
+      margin:0 0 8px;
+      font-size:25px;
+      letter-spacing:-.04em;
+    }
+    .brand p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.75;
+    }
+    .block{
+      padding:16px;
+      border-radius:22px;
+      background:rgba(255,255,255,.72);
+      border:1px solid rgba(217,207,190,.82);
+    }
+    .block h3{
+      margin:0 0 12px;
+      font-size:14px;
+    }
+    .meta{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.7;
+    }
+    .meta strong{color:var(--text)}
+    .side-actions{display:grid;gap:10px}
+    .ghost-btn{
+      min-height:42px;
+      padding:0 14px;
+      border-radius:14px;
+      background:#fff;
+      border:1px solid var(--border);
+      color:var(--text);
+      font-weight:800;
+    }
+    .chat-shell{
+      border-radius:28px;
+      padding:18px;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      min-height:calc(100vh - 48px);
+    }
+    .chat-topbar{
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+      padding:8px 10px 18px;
+      border-bottom:1px solid rgba(217,207,190,.84);
+    }
+    .chat-topbar h2{
+      margin:0 0 8px;
+      font-size:30px;
+      letter-spacing:-.04em;
+    }
+    .chat-topbar p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.75;
+    }
+    .pills{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      justify-content:flex-end;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      min-height:34px;
+      padding:0 12px;
+      border-radius:999px;
+      background:#fff;
+      border:1px solid var(--border);
+      color:#504437;
+      font-size:12px;
+      font-weight:800;
+    }
+    .messages{
+      padding:18px 8px 12px;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+    .empty{
+      margin:auto;
+      max-width:560px;
+      text-align:center;
+      padding:28px;
+      border-radius:26px;
+      background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,250,242,.88));
+      border:1px solid rgba(217,207,190,.8);
+    }
+    .empty h3{
+      margin:0 0 10px;
+      font-size:30px;
+      letter-spacing:-.04em;
+    }
+    .empty p{
+      margin:0;
+      color:var(--muted);
+      font-size:15px;
+      line-height:1.85;
+    }
+    .message{
+      display:grid;
+      grid-template-columns:44px minmax(0,1fr);
+      gap:14px;
+      align-items:flex-start;
+    }
+    .avatar{
+      width:44px;
+      height:44px;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      font-size:13px;
+      font-weight:800;
+      border:1px solid rgba(35,27,18,.08);
+      background:#fff;
+      color:var(--text);
+    }
+    .message.user .avatar{
+      background:linear-gradient(180deg, #40362a, #231b12);
+      color:#fff;
+    }
+    .message.assistant .avatar{
+      background:linear-gradient(180deg, var(--accent-soft), #bee6de);
+      color:var(--accent-deep);
+    }
+    .bubble{
+      padding:18px 20px;
+      border-radius:24px;
+      border:1px solid rgba(217,207,190,.92);
+      box-shadow:0 8px 18px rgba(63, 44, 22, .04);
+    }
+    .message.user .bubble{background:var(--user)}
+    .message.assistant .bubble{background:var(--panel)}
+    .message.system .bubble{
+      background:var(--danger-soft);
+      border-color:rgba(180,35,24,.22);
+    }
+    .bubble-head{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:10px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+    }
+    .bubble-content{
+      font-size:15px;
+      line-height:1.86;
+      word-break:break-word;
+    }
+    .bubble-content p{margin:0 0 12px}
+    .bubble-content p:last-child{margin-bottom:0}
+    .bubble-content pre{
+      margin:14px 0;
+      padding:16px;
+      border-radius:18px;
+      overflow:auto;
+      background:#191919;
+      color:#f6f3ee;
+      font-size:13px;
+      line-height:1.7;
+      font-family:var(--mono);
+    }
+    .inline-code{
+      display:inline-block;
+      padding:1px 7px;
+      border-radius:8px;
+      background:#efe8db;
+      border:1px solid rgba(217,207,190,.9);
+      font-family:var(--mono);
+      font-size:.94em;
+    }
+    .formula-block{
+      margin:12px 0;
+      padding:14px 16px;
+      border-radius:18px;
+      background:linear-gradient(180deg, #f6fbfa, #eef7f6);
+      border:1px solid rgba(20,108,99,.15);
+      font-family:var(--mono);
+      font-size:13px;
+      line-height:1.8;
+      white-space:pre-wrap;
+    }
+    .list-line{
+      position:relative;
+      padding-left:16px;
+    }
+    .list-line::before{
+      content:"•";
+      position:absolute;
+      left:0;
+      color:var(--accent-deep);
+    }
+    .typing{
+      display:inline-flex;
+      gap:6px;
+      align-items:center;
+      min-height:22px;
+    }
+    .typing span{
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:rgba(20,108,99,.6);
+      animation:blink 1.1s infinite ease-in-out;
+    }
+    .typing span:nth-child(2){animation-delay:.15s}
+    .typing span:nth-child(3){animation-delay:.3s}
+    @keyframes blink{
+      0%,80%,100%{opacity:.25;transform:translateY(0)}
+      40%{opacity:1;transform:translateY(-2px)}
+    }
+    .composer-wrap{
+      padding-top:14px;
+      border-top:1px solid rgba(217,207,190,.84);
+    }
+    .composer{
+      padding:12px;
+      border-radius:26px;
+      background:rgba(255,255,255,.8);
+      border:1px solid rgba(217,207,190,.92);
+    }
+    .composer textarea{
+      min-height:80px;
+      max-height:220px;
+      resize:none;
+      border:0;
+      background:transparent;
+      box-shadow:none !important;
+      padding:6px 6px 10px;
+      line-height:1.75;
+      font-size:15px;
+    }
+    .composer-bar{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:center;
+      padding:0 4px 2px;
+    }
+    .composer-tip{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.6;
+    }
+    .composer-actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .send-btn{
+      width:46px;
+      height:46px;
+      border-radius:16px;
+      background:var(--accent);
+      color:#fff;
+      font-size:18px;
+      font-weight:900;
+    }
+    .send-btn:hover:not(:disabled){background:var(--accent-deep)}
+    .app-status{
+      padding:0 6px 6px;
+      min-height:24px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.7;
+      white-space:pre-wrap;
+    }
+    @media (max-width:1080px){
+      .login-shell{grid-template-columns:1fr}
+      .hero h1{font-size:44px}
+      .chat-layout{grid-template-columns:1fr}
+      .sidebar{order:2}
+      .chat-shell{min-height:unset}
+    }
+    @media (max-width:720px){
+      .screen{padding:14px}
+      .hero,.panel,.sidebar,.chat-shell{border-radius:24px}
+      .grid,.hero-grid{grid-template-columns:1fr}
+      .chat-topbar,.composer-bar{flex-direction:column;align-items:flex-start}
+      .pills{justify-content:flex-start}
+      .message{grid-template-columns:1fr}
+      .avatar{width:38px;height:38px}
+      .composer-actions{width:100%;justify-content:space-between}
+    }
+  </style>
+</head>
+<body>
+  <main id="loginScreen" class="screen">
+    <div class="login-shell">
+      <section class="hero">
+        <div>
+          <div class="eyebrow">Local Docker Launcher</div>
+          <h1>先登录，再启动后端。</h1>
+          <p>
+            这个页面不再直接请求你的 docker 后端，而是先把邮箱、密码、OTP 密钥提交给本地启动器。
+            点击“启动后端并进入聊天”后，本地服务会自动执行 <span class="inline-code">docker build/run</span>，等模型可用后再进入聊天页。
+          </p>
+        </div>
+
+        <div class="hero-grid">
+          <div class="hero-card">
+            <strong>第一步</strong>
+            <span>输入邮箱、密码、OTP 密钥和代理地址。</span>
+          </div>
+          <div class="hero-card">
+            <strong>第二步</strong>
+            <span>点击启动，本地服务去拉起 docker 容器。</span>
+          </div>
+          <div class="hero-card">
+            <strong>第三步</strong>
+            <span>之后每次发消息，都由本地服务代理一次后端请求。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>启动配置</h2>
+        <p>这里是本地启动参数，不是后端真正的网页登录接口。它们会保存在这台机器本地。</p>
+
+        <form id="loginForm">
+          <div class="grid">
+            <div class="field">
+              <label for="emailInput">邮箱</label>
+              <input id="emailInput" type="email" autocomplete="username" placeholder="your@email.com" />
+            </div>
+
+            <div class="field">
+              <label for="passwordInput">密码</label>
+              <input id="passwordInput" type="password" autocomplete="current-password" placeholder="输入密码" />
+            </div>
+
+            <div class="field">
+              <label for="otpInput">OTP 密钥</label>
+              <input id="otpInput" type="password" autocomplete="off" placeholder="MOHF2Z..." />
+            </div>
+
+            <div class="field">
+              <label for="tokenInput">Bearer Token</label>
+              <input id="tokenInput" type="text" autocomplete="off" placeholder="anything" />
+            </div>
+
+            <div class="field full">
+              <label for="proxyInput">代理地址</label>
+              <input id="proxyInput" type="text" autocomplete="off" placeholder="http://host.docker.internal:7890" />
+              <div class="hint">会写入容器的 <span class="inline-code">PROXY_SERVER</span>。</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="saveConfigBtn" class="btn btn-secondary" type="button">保存配置</button>
+            <button id="checkBackendBtn" class="btn btn-secondary" type="button">检查现有后端</button>
+            <button id="startBtn" class="btn btn-primary" type="submit">启动后端并进入聊天</button>
+          </div>
+          <div id="loginStatus" class="status"></div>
+        </form>
+
+        <div class="note">
+          说明：
+          这个页面通过本地 Python 服务来启动 docker，所以你打开的不是一个纯静态 HTML。
+          第一次启动如果本地没有 <span class="inline-code">llm-web-api-fixed</span> 镜像，会先自动构建。
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <main id="chatScreen" class="screen hidden">
+    <div class="chat-layout">
+      <aside class="sidebar">
+        <section class="brand">
+          <h2>LLM Chat</h2>
+          <p id="userSummary">未连接</p>
+        </section>
+
+        <section class="block">
+          <h3>会话配置</h3>
+          <div class="field">
+            <label for="modelSelect">模型</label>
+            <select id="modelSelect"></select>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label for="chatModeSelect">聊天模式</label>
+            <select id="chatModeSelect">
+              <option value="independent">独立单次</option>
+              <option value="current">当前 chat</option>
+              <option value="named">命名 chat</option>
+            </select>
+          </div>
+          <div id="namedChatField" class="field hidden" style="margin-top:12px;">
+            <label for="chatNameInput">chat_name</label>
+            <input id="chatNameInput" type="text" autocomplete="off" placeholder="A" />
+          </div>
+        </section>
+
+        <section class="block">
+          <h3>连接信息</h3>
+          <div class="meta">
+            <div><strong>后端地址</strong><br /><span>http://127.0.0.1:5000/v1</span></div>
+            <div><strong>本地账号</strong><br /><span id="credentialSummary">-</span></div>
+            <div><strong>代理地址</strong><br /><span id="proxySummary">-</span></div>
+          </div>
+        </section>
+
+        <section class="block">
+          <h3>操作</h3>
+          <div class="side-actions">
+            <button id="newChatBtn" class="ghost-btn" type="button">新建本地对话</button>
+            <button id="refreshModelsBtn" class="ghost-btn" type="button">刷新模型</button>
+            <button id="restartBtn" class="ghost-btn" type="button">重新启动后端</button>
+            <button id="backBtn" class="ghost-btn" type="button">返回登录页</button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="chat-shell">
+        <div class="chat-topbar">
+          <div>
+            <h2 id="chatTitle">新对话</h2>
+            <p id="chatSubtitle">下面输入一条消息，回车发送。</p>
+          </div>
+          <div class="pills">
+            <div id="modePill" class="pill">模式：独立单次</div>
+            <div id="modelPill" class="pill">模型：-</div>
+          </div>
+        </div>
+
+        <div id="messages" class="messages">
+          <div class="empty">
+            <h3>准备好了。</h3>
+            <p>输入一条消息，按回车发送；如果要换行，用 <span class="inline-code">Shift + Enter</span>。</p>
+          </div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea id="composerInput" placeholder="给模型发一条消息..." spellcheck="false"></textarea>
+            <div class="composer-bar">
+              <div class="composer-tip">每发一次消息，本地服务都会向后端发起一次 `/v1/chat/completions` 请求。</div>
+              <div class="composer-actions">
+                <button id="clearDraftBtn" class="ghost-btn" type="button">清空输入</button>
+                <button id="sendBtn" class="send-btn" type="button" aria-label="发送">↑</button>
+              </div>
+            </div>
+          </div>
+          <div id="appStatus" class="app-status"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const DEFAULT_TOKEN = "anything";
+    const DEFAULT_PROXY = "http://host.docker.internal:7890";
+    const DEFAULT_MODEL = "gpt-5-3";
+    const LOCAL_STORAGE_KEY = "llm_local_chat_messages_v1";
+
+    const state = {
+      config: {
+        email: "",
+        password: "",
+        otp_secret: "",
+        proxy_server: DEFAULT_PROXY,
+        token: DEFAULT_TOKEN,
+        selected_model: DEFAULT_MODEL
+      },
+      models: [],
+      messages: [],
+      chatMode: "independent",
+      chatName: "A",
+      sending: false,
+      title: "新对话"
+    };
+
+    const loginScreen = document.getElementById("loginScreen");
+    const chatScreen = document.getElementById("chatScreen");
+    const loginForm = document.getElementById("loginForm");
+    const emailInput = document.getElementById("emailInput");
+    const passwordInput = document.getElementById("passwordInput");
+    const otpInput = document.getElementById("otpInput");
+    const tokenInput = document.getElementById("tokenInput");
+    const proxyInput = document.getElementById("proxyInput");
+    const saveConfigBtn = document.getElementById("saveConfigBtn");
+    const checkBackendBtn = document.getElementById("checkBackendBtn");
+    const startBtn = document.getElementById("startBtn");
+    const loginStatus = document.getElementById("loginStatus");
+
+    const userSummary = document.getElementById("userSummary");
+    const credentialSummary = document.getElementById("credentialSummary");
+    const proxySummary = document.getElementById("proxySummary");
+    const modelSelect = document.getElementById("modelSelect");
+    const chatModeSelect = document.getElementById("chatModeSelect");
+    const namedChatField = document.getElementById("namedChatField");
+    const chatNameInput = document.getElementById("chatNameInput");
+    const newChatBtn = document.getElementById("newChatBtn");
+    const refreshModelsBtn = document.getElementById("refreshModelsBtn");
+    const restartBtn = document.getElementById("restartBtn");
+    const backBtn = document.getElementById("backBtn");
+    const chatTitle = document.getElementById("chatTitle");
+    const chatSubtitle = document.getElementById("chatSubtitle");
+    const modePill = document.getElementById("modePill");
+    const modelPill = document.getElementById("modelPill");
+    const messagesEl = document.getElementById("messages");
+    const composerInput = document.getElementById("composerInput");
+    const clearDraftBtn = document.getElementById("clearDraftBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const appStatus = document.getElementById("appStatus");
+
+    function escapeHtml(text){
+      return String(text)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#39;");
+    }
+
+    function setStatus(element, message, isError){
+      element.textContent = message || "";
+      element.classList.toggle("error", Boolean(isError));
+    }
+
+    function formatTimestamp(ts){
+      return new Date(ts).toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function syncInputsFromState(){
+      emailInput.value = state.config.email;
+      passwordInput.value = state.config.password;
+      otpInput.value = state.config.otp_secret;
+      tokenInput.value = state.config.token || DEFAULT_TOKEN;
+      proxyInput.value = state.config.proxy_server || DEFAULT_PROXY;
+      chatModeSelect.value = state.chatMode;
+      chatNameInput.value = state.chatName;
+      toggleNamedField();
+      renderModelOptions();
+    }
+
+    function syncStateFromInputs(){
+      state.config.email = emailInput.value.trim();
+      state.config.password = passwordInput.value;
+      state.config.otp_secret = otpInput.value.trim();
+      state.config.token = tokenInput.value.trim() || DEFAULT_TOKEN;
+      state.config.proxy_server = proxyInput.value.trim() || DEFAULT_PROXY;
+      state.chatMode = chatModeSelect.value;
+      state.chatName = chatNameInput.value.trim() || "A";
+      state.config.selected_model = modelSelect.value || state.config.selected_model || DEFAULT_MODEL;
+    }
+
+    function saveLocalConversation(){
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        messages: state.messages.filter(item => !item.pending),
+        title: state.title
+      }));
+    }
+
+    function loadLocalConversation(){
+      try{
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if(!raw) return;
+        const data = JSON.parse(raw);
+        state.messages = Array.isArray(data.messages) ? data.messages : [];
+        state.title = data.title || "新对话";
+      }catch(err){
+        console.warn("restore messages failed", err);
+      }
+    }
+
+    function showScreen(name){
+      loginScreen.classList.toggle("hidden", name !== "login");
+      chatScreen.classList.toggle("hidden", name !== "chat");
+      if(name === "chat"){
+        composerInput.focus();
+      }
+    }
+
+    async function apiRequest(url, options){
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if(!response.ok){
+        throw new Error(data.error || ("请求失败：" + response.status));
+      }
+      return data;
+    }
+
+    async function loadState(){
+      const data = await apiRequest("/api/state");
+      state.config = {
+        ...state.config,
+        ...data.config
+      };
+      state.models = Array.isArray(data.models) ? data.models : [];
+      if(!state.models.length && state.config.selected_model){
+        state.models = [state.config.selected_model];
+      }
+      syncInputsFromState();
+      updateChatMeta();
+      if(data.backend_ready){
+        setStatus(loginStatus, "检测到现有后端已可用。可以直接进入聊天或重新启动。", false);
+      }
+    }
+
+    async function saveConfig(){
+      syncStateFromInputs();
+      const data = await apiRequest("/api/save-config", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(state.config)
+      });
+      state.config = {...state.config, ...data.config};
+      setStatus(loginStatus, "配置已保存。", false);
+      updateChatMeta();
+    }
+
+    async function checkBackend(){
+      const data = await apiRequest("/api/models");
+      state.models = Array.isArray(data.models) ? data.models : [];
+      if(state.models.length){
+        state.config.selected_model = state.models.includes(state.config.selected_model)
+          ? state.config.selected_model
+          : state.models[0];
+      }
+      renderModelOptions();
+      updateChatMeta();
+      setStatus(loginStatus, "后端可用，模型：" + state.models.join(", "), false);
+    }
+
+    async function startBackendAndEnter(){
+      syncStateFromInputs();
+      setStatus(loginStatus, "正在启动 docker 并等待模型列表...", false);
+      startBtn.disabled = true;
+      checkBackendBtn.disabled = true;
+      saveConfigBtn.disabled = true;
+
+      try{
+        const data = await apiRequest("/api/start", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(state.config)
+        });
+        state.config = {...state.config, ...data.config};
+        state.models = Array.isArray(data.models) ? data.models : [];
+        if(state.models.length){
+          state.config.selected_model = state.models.includes(state.config.selected_model)
+            ? state.config.selected_model
+            : state.models[0];
+        }
+        renderModelOptions();
+        updateChatMeta();
+        showScreen("chat");
+        setStatus(appStatus, "后端已启动，可以开始聊天。", false);
+      }catch(err){
+        setStatus(loginStatus, err.message || String(err), true);
+      }finally{
+        startBtn.disabled = false;
+        checkBackendBtn.disabled = false;
+        saveConfigBtn.disabled = false;
+      }
+    }
+
+    function toggleNamedField(){
+      namedChatField.classList.toggle("hidden", chatModeSelect.value !== "named");
+    }
+
+    function renderModelOptions(){
+      const models = state.models.length ? state.models : [state.config.selected_model || DEFAULT_MODEL];
+      if(!models.includes(state.config.selected_model)){
+        state.config.selected_model = models[0];
+      }
+      modelSelect.innerHTML = models.map(model =>
+        '<option value="' + escapeHtml(model) + '">' + escapeHtml(model) + "</option>"
+      ).join("");
+      modelSelect.value = state.config.selected_model || DEFAULT_MODEL;
+    }
+
+    function updateChatMeta(){
+      userSummary.textContent = state.config.email || "未填写邮箱";
+      credentialSummary.textContent = state.config.email
+        ? state.config.email + (state.config.otp_secret ? " / 已填 OTP" : " / 未填 OTP")
+        : "未填写";
+      proxySummary.textContent = state.config.proxy_server || DEFAULT_PROXY;
+      modelPill.textContent = "模型：" + (state.config.selected_model || DEFAULT_MODEL);
+      modePill.textContent = "模式：" + ({
+        independent: "独立单次",
+        current: "当前 chat",
+        named: "命名 chat"
+      }[state.chatMode] || state.chatMode);
+      chatTitle.textContent = state.title || "新对话";
+
+      let subtitle = "下面输入一条消息，回车发送。";
+      if(state.chatMode === "current"){
+        subtitle = "当前模式会继续后端当前 chat。";
+      }else if(state.chatMode === "named"){
+        subtitle = "当前模式会继续命名 chat：" + (state.chatName || "A");
+      }else if(state.chatMode === "independent"){
+        subtitle = "当前模式下每次请求都不继承上下文。";
+      }
+      chatSubtitle.textContent = subtitle;
+    }
+
+    function normalizeUnicodeMath(text){
+      const map = {
+        "𝐴":"A","𝐵":"B","𝐶":"C","𝐷":"D","𝐸":"E","𝐼":"I",
+        "𝑄":"Q","𝑇":"T","𝑎":"a","𝑏":"b","𝑐":"c","𝑑":"d","𝑘":"k","𝑛":"n",
+        "−":"-","⋅":"·","·":"·","∣":"|","⁡":"","…":"...","⋯":"...",
+        " ":" "," ":" ","​":"","\t":" "
+      };
+      return String(text)
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .replace(/[𝐴𝐵𝐶𝐷𝐸𝐼𝑄𝑇𝑎𝑏𝑐𝑑𝑘𝑛−⋅·∣⁡…⋯  ​\t]/g, ch => map[ch] || ch)
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n");
+    }
+
+    function looksLikeFormulaLine(line){
+      const s = line.trim();
+      if(!s) return false;
+      if(/^[A-Za-z0-9]+$/.test(s)) return true;
+      if(/^[A-Za-z0-9·|=+\-*/()[\]{}.,:→<> ]+$/.test(s) && s.length <= 40) return true;
+      if(/^(det|adj|diag|Python|Run)$/.test(s)) return true;
+      return false;
+    }
+
+    function mergeFormulaBlock(blockLines){
+      let merged = blockLines
+        .map(x => x.trim())
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      merged = merged.replace(/\bA\s*-\s*1\b/g, "A^{-1}");
+      merged = merged.replace(/\bQ\s*-\s*1\b/g, "Q^{-1}");
+      merged = merged.replace(/\bD\s*-\s*1\b/g, "D^{-1}");
+      merged = merged.replace(/\bQ\s*T\b/g, "Q^T");
+      merged = merged.replace(/\[\s*A\s*\|\s*I\s*\]/g, "[A | I]");
+      merged = merged.replace(/\[\s*I\s*\|\s*A\^{-1}\s*\]/g, "[I | A^{-1}]");
+      merged = merged.replace(/A\s*·\s*A\s*-\s*1\s*=\s*I/g, "A · A^{-1} = I");
+      merged = merged.replace(/A\s*·\s*A\^{-1}\s*=\s*I/g, "A · A^{-1} = I");
+      return merged;
+    }
+
+    function mergeBrokenFormulaLines(text){
+      const lines = text.split("\n");
+      const out = [];
+      let i = 0;
+
+      while(i < lines.length){
+        const cur = lines[i].trim();
+        if(looksLikeFormulaLine(cur)){
+          const block = [];
+          let j = i;
+
+          while(j < lines.length){
+            const s = lines[j].trim();
+            if(s === ""){
+              if(j + 1 < lines.length && looksLikeFormulaLine(lines[j + 1].trim())){
+                j++;
+                continue;
+              }
+              break;
+            }
+            if(!looksLikeFormulaLine(s)) break;
+            block.push(s);
+            j++;
+          }
+
+          if(block.length >= 2){
+            out.push(mergeFormulaBlock(block));
+          }else{
+            out.push(...block);
+          }
+
+          i = j;
+          continue;
+        }
+
+        out.push(lines[i]);
+        i++;
+      }
+
+      return out.join("\n");
+    }
+
+    function cleanupBrokenMathBlocks(text){
+      return mergeBrokenFormulaLines(normalizeUnicodeMath(text)).replace(/\n{3,}/g, "\n\n").trim();
+    }
+
+    function renderInlineMarkup(text){
+      const escaped = escapeHtml(text);
+      return escaped.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+    }
+
+    function isFormulaBlock(block){
+      const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
+      if(!lines.length) return false;
+      if(lines.length >= 2 && lines.every(looksLikeFormulaLine)) return true;
+      return /A\^{-1}|Q\^{-1}|D\^{-1}|det\(A\)|adj\(A\)|diag\(|\[[A-Z ]+\|[A-Z ]+\]|[=|·]/.test(block)
+        && !/[。！？]/.test(block);
+    }
+
+    function renderTextBlocks(text){
+      const blocks = text.split(/\n{2,}/);
+      const html = [];
+
+      for(const block of blocks){
+        const trimmed = block.trim();
+        if(!trimmed) continue;
+
+        if(isFormulaBlock(trimmed)){
+          html.push('<div class="formula-block">' + escapeHtml(trimmed) + "</div>");
+          continue;
+        }
+
+        if(trimmed.split("\n").every(line => line.trim().startsWith("- "))){
+          trimmed.split("\n").forEach(line => {
+            html.push('<p class="list-line">' + renderInlineMarkup(line.trim().slice(2)) + "</p>");
+          });
+          continue;
+        }
+
+        html.push("<p>" + renderInlineMarkup(trimmed).replace(/\n/g, "<br />") + "</p>");
+      }
+
+      return html.join("");
+    }
+
+    function renderMessageBody(rawText, role){
+      const text = role === "assistant" ? cleanupBrokenMathBlocks(rawText) : String(rawText || "");
+      const parts = [];
+      const codeRegex = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
+
+      while((match = codeRegex.exec(text))){
+        const before = text.slice(lastIndex, match.index);
+        if(before.trim()){
+          parts.push(renderTextBlocks(before));
+        }
+        const code = escapeHtml(match[2].trimEnd());
+        parts.push("<pre><code>" + code + "</code></pre>");
+        lastIndex = match.index + match[0].length;
+      }
+
+      const rest = text.slice(lastIndex);
+      if(rest.trim()){
+        parts.push(renderTextBlocks(rest));
+      }
+
+      return parts.join("") || "<p></p>";
+    }
+
+    function deriveTitle(text){
+      const trimmed = String(text || "").trim().replace(/\s+/g, " ");
+      return trimmed ? trimmed.slice(0, 20) : "新对话";
+    }
+
+    function renderMessages(){
+      if(!state.messages.length){
+        messagesEl.innerHTML =
+          '<div class="empty">' +
+            "<h3>准备好了。</h3>" +
+            '<p>输入一条消息，按回车发送；如果要换行，用 <span class="inline-code">Shift + Enter</span>。</p>' +
+          "</div>";
+        return;
+      }
+
+      messagesEl.innerHTML = state.messages.map(message => {
+        const role = message.role;
+        const label = role === "user" ? "You" : role === "assistant" ? "Assistant" : "System";
+        const avatar = role === "user" ? "YOU" : role === "assistant" ? "AI" : "SYS";
+        const content = message.pending
+          ? '<div class="typing"><span></span><span></span><span></span></div>'
+          : renderMessageBody(message.content, role);
+
+        return (
+          '<article class="message ' + escapeHtml(role) + '">' +
+            '<div class="avatar">' + avatar + "</div>" +
+            '<div class="bubble">' +
+              '<div class="bubble-head">' +
+                "<span>" + label + "</span>" +
+                "<span>" + formatTimestamp(message.createdAt) + "</span>" +
+              "</div>" +
+              '<div class="bubble-content">' + content + "</div>" +
+            "</div>" +
+          "</article>"
+        );
+      }).join("");
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderAfterStateChange(){
+      renderModelOptions();
+      updateChatMeta();
+      renderMessages();
+      saveLocalConversation();
+    }
+
+    function setSending(sending){
+      state.sending = sending;
+      sendBtn.disabled = sending;
+      composerInput.disabled = sending;
+      modelSelect.disabled = sending;
+      chatModeSelect.disabled = sending;
+      chatNameInput.disabled = sending;
+      refreshModelsBtn.disabled = sending;
+      restartBtn.disabled = sending;
+      sendBtn.textContent = sending ? "…" : "↑";
+    }
+
+    function buildPayload(text){
+      const payload = {
+        model: state.config.selected_model || DEFAULT_MODEL,
+        messages: [{role:"user", content:text}]
+      };
+      if(state.chatMode === "current"){
+        payload.chat_mode = "current";
+      }else if(state.chatMode === "named"){
+        payload.chat_mode = "named";
+        payload.chat_name = state.chatName || "A";
+        payload.create_if_missing = true;
+      }
+      return payload;
+    }
+
+    function extractAssistantContent(data){
+      const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+      const content = choice?.message?.content;
+      if(typeof content !== "string"){
+        throw new Error("返回结果里没有 choices[0].message.content。");
+      }
+      return content;
+    }
+
+    function addMessage(role, content, extra){
+      state.messages.push({
+        role,
+        content,
+        createdAt: Date.now(),
+        pending: false,
+        ...extra
+      });
+      renderAfterStateChange();
+    }
+
+    function removePendingMessage(){
+      state.messages = state.messages.filter(item => !item.pending);
+      renderAfterStateChange();
+    }
+
+    function replacePendingMessage(content){
+      const pending = [...state.messages].reverse().find(item => item.pending);
+      if(!pending) return;
+      pending.pending = false;
+      pending.content = content;
+      pending.createdAt = Date.now();
+      renderAfterStateChange();
+    }
+
+    function autoResizeComposer(){
+      composerInput.style.height = "0px";
+      composerInput.style.height = Math.min(composerInput.scrollHeight, 220) + "px";
+    }
+
+    async function sendMessage(){
+      if(state.sending) return;
+
+      const text = composerInput.value.trim();
+      if(!text){
+        setStatus(appStatus, "先输入一条消息。", true);
+        return;
+      }
+
+      syncStateFromInputs();
+      if(state.messages.length === 0){
+        state.title = deriveTitle(text);
+      }
+
+      addMessage("user", text);
+      state.messages.push({
+        role: "assistant",
+        content: "",
+        createdAt: Date.now(),
+        pending: true
+      });
+      renderAfterStateChange();
+      composerInput.value = "";
+      autoResizeComposer();
+      setSending(true);
+      setStatus(appStatus, "正在等待后端返回内容...", false);
+
+      try{
+        const data = await apiRequest("/api/chat", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(buildPayload(text))
+        });
+        replacePendingMessage(extractAssistantContent(data));
+        setStatus(appStatus, "返回成功。", false);
+      }catch(err){
+        removePendingMessage();
+        addMessage("system", err.message || String(err));
+        setStatus(appStatus, "发送失败，请检查 docker 后端是否仍在运行。", true);
+      }finally{
+        setSending(false);
+      }
+    }
+
+    async function refreshModels(){
+      const data = await apiRequest("/api/models");
+      state.models = Array.isArray(data.models) ? data.models : [];
+      if(state.models.length){
+        state.config.selected_model = state.models.includes(state.config.selected_model)
+          ? state.config.selected_model
+          : state.models[0];
+      }
+      renderAfterStateChange();
+    }
+
+    function clearConversation(){
+      state.messages = [];
+      state.title = "新对话";
+      renderAfterStateChange();
+      setStatus(appStatus, "本地消息已清空。注意：如果你用 current 或 named，后端会话本身不会删除。", false);
+    }
+
+    function bindEvents(){
+      loginForm.addEventListener("submit", event => {
+        event.preventDefault();
+        startBackendAndEnter();
+      });
+
+      saveConfigBtn.addEventListener("click", async () => {
+        try{
+          await saveConfig();
+        }catch(err){
+          setStatus(loginStatus, err.message || String(err), true);
+        }
+      });
+
+      checkBackendBtn.addEventListener("click", async () => {
+        setStatus(loginStatus, "正在检查当前后端...", false);
+        try{
+          await saveConfig();
+          await checkBackend();
+        }catch(err){
+          setStatus(loginStatus, err.message || String(err), true);
+        }
+      });
+
+      chatModeSelect.addEventListener("change", () => {
+        toggleNamedField();
+        syncStateFromInputs();
+        updateChatMeta();
+      });
+
+      chatNameInput.addEventListener("input", () => {
+        syncStateFromInputs();
+        updateChatMeta();
+      });
+
+      modelSelect.addEventListener("change", () => {
+        syncStateFromInputs();
+        updateChatMeta();
+      });
+
+      newChatBtn.addEventListener("click", clearConversation);
+
+      refreshModelsBtn.addEventListener("click", async () => {
+        setStatus(appStatus, "正在刷新模型列表...", false);
+        try{
+          await refreshModels();
+          setStatus(appStatus, "模型列表已刷新。", false);
+        }catch(err){
+          setStatus(appStatus, err.message || String(err), true);
+        }
+      });
+
+      restartBtn.addEventListener("click", async () => {
+        showScreen("login");
+        setStatus(loginStatus, "请确认登录信息后重新点击启动。", false);
+      });
+
+      backBtn.addEventListener("click", () => {
+        showScreen("login");
+      });
+
+      clearDraftBtn.addEventListener("click", () => {
+        composerInput.value = "";
+        autoResizeComposer();
+        composerInput.focus();
+      });
+
+      sendBtn.addEventListener("click", sendMessage);
+      composerInput.addEventListener("input", autoResizeComposer);
+      composerInput.addEventListener("keydown", event => {
+        if(event.key === "Enter" && !event.shiftKey){
+          event.preventDefault();
+          sendMessage();
+        }
+      });
+    }
+
+    async function init(){
+      loadLocalConversation();
+      state.messages = state.messages.filter(item => !item?.pending);
+      syncInputsFromState();
+      renderAfterStateChange();
+      autoResizeComposer();
+      bindEvents();
+
+      try{
+        await loadState();
+      }catch(err){
+        setStatus(loginStatus, err.message || String(err), true);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
